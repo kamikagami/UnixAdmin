@@ -3,9 +3,9 @@
 #Command 
 ECHO='/bin/echo'
 ZIP='/usr/bin/zip'
-TAR='/usr/bin/tar'
+TAR='/bin/tar'
 UNZIP='/usr/bin/unzip'
-
+FIND='/usr/bin/find'
 #Variable
 INPUT=
 INPUT2=
@@ -14,7 +14,12 @@ FILESNAME=
 DATE=
 ARCMTD=
 BKNAME=
+BACKUP_FILE=
+HASH=
+MD5_SUM=
+SHA1_SUM=
 DST=
+FILE_TYPE=NULL
 
 MD5_LEN=32
 SHA1_LEN=40
@@ -56,28 +61,28 @@ while true; do
             ;;
             4)
             if [ ! -z $DATE ];then
-                FILENAME=$(find $DIRECTORY ! -newermt $DATE)
+                FILENAME=$($FIND $DIRECTORY ! -newermt $DATE)
             fi
             
             if [ $ARCMTD = "zip" ] && [ $INPUT2 = "a" ];then
                 $ZIP -j "$USER-backup" $DIRECTORY/$FILENAME;
             elif [ "$ARCMTD" = "zip" ] && [ "$INPUT2" = "b" ];then
-                $ZIP -j "$USER-backup" $FILENAME; #TODO complete MODIFIED DATE
+                $ZIP -j "$USER-backup" $FILENAME;
             fi
 
+            set -x
             if [ "$ARCMTD" = "tar" ] && [ "$INPUT2" = "a" ];then
-                $TAR -cvzf "$USER-backup.tar" $DIRECTORY/$FILENAME;
+                $TAR -C $DIRECTORY -cvzf "$USER-backup.tar" $FILENAME;
             elif [ "$ARCMTD" = "tar" ] && [ "$INPUT2" = "b" ];then
-                #TODO complete modified date
-                echo ""
+                $TAR -C $DIRECTORY -cvzf "$USER-backup.tar" $FILENAME;
             fi
 
             if [ "$ARCMTD" = "tgz" ] && [ "$INPUT2" = "a" ];then
-                $TAR -cvzf "$USER-backup.tar.gz" $DIRECTORY/$FILENAME;
+                $TAR -C $DIRECTORY -cvzf "$USER-backup.tar.gz" $FILENAME;
             elif [ "$ARCMTD" = "tgz" ] && [ "$INPUT2" = "b" ];then
-               echo something here; 
-               #TODO complete modified date
+                $TAR -C $DIRECTORY -cvzf "$USER-backup.tar.gz" $FILENAME
             fi 
+            set +x
             ;;
             5)
             read -p "Please input a backup file" BKNAME
@@ -93,36 +98,67 @@ while true; do
             read -p "Please input the name of backup file" BACKUP_FILE
             read -p "Please input a md5 or sha1 value: " HASH
             if [ ${#HASH} -eq $MD5_LEN ];then
-                md5_sum=$(md5sum $BACKUP_FILE | awk '{ print $1 }');
-              if [ $HASH = $md5_sum ];then
-                echo "Value matches!";
+                MD5_SUM=$(md5sum $BACKUP_FILE | awk '{ print $1 }');
+              if [ $HASH = $MD5_SUM ];then
+                $ECHO "Value matches!";
               else
-                echo "Value doesn\'t match";
+                $ECHO "Value doesn\'t match";
               fi
             
             elif [ ${#HASH} -eq $SHA1_LEN ];then
-              sha1_sum=$(sha1sum $BACKUP_FILE | awk '{ print $1 }');
-              if [ $HASH = $sha1_sum ];then
-                echo "Value matches!";
+              SHA1_SUM=$(sha1sum $BACKUP_FILE | awk '{ print $1 }');
+              if [ $HASH = $SHA1_SUM ];then
+                $ECHO "Value matches!";
               else
-                echo "Value doesn\'t match";
+                $ECHO "Value doesn\'t match";
               fi
             fi
                 ;;
             7)
+                read -p "Please input the backup file: " BKNAME
+                read -p "Please input the pattern: " PATTERN
 
+                file $BKNAME | grep Zip > /dev/null 2>&1
+                if [ $? -eq 0 ];then
+                  FILE_TYPE='zip'
+                fi
 
+                if [ $FILE_TYPE = 'zip' ];then
+                   FILES=$(unzip -l $BKNAME | awk '{ if (NR >= 4 && $4 != "") { print $4; } }')
+                   grep $PATTERN $BKNAME > /dev/null 2>&1  
+                   if [ $? -eq 0 ];then
+                     $ECHO "Matched"   
+                   else
+                     $ECHO "Unmatched"
+                   fi
+                fi
+                file $BKNAME | grep -i gzip > /dev/null 2>&1
+                if [ $? -eq 0 ];then
+                    FILE_TYPE='tar'
+                fi
+                
+                if [ $FILE_TYPE = 'tar' ];then
+                    zgrep $PATTERN $BKNAME
+                    if [ $? -ne 0 ];then
+                        $ECHO "Unmatched"
+                    fi
+                fi
+                            
                 ;;
             8)
-
-
+                read -p "Please input the backup filename: " FILENAME
+                read -p "Please input the output filename: " OUTPUT
+                openssl aes-256-cbc -a -salt -in $FILENAME -out $OUTPUT 
+                
                 ;;
 
             9)
-
-
+                read -p "Please input the encrypted backup filename: " FILENAME
+                read -p "Please input the output filename: " OUTPUT
+                openssl aes-256-cbc -a -d -in $FILENAME -out $OUTPUT 
                 ;;
             10)
+                echo Bye
                 exit
                 ;;
             \?) 
